@@ -1,0 +1,222 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: conditional-pipeline-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.10, pipelines.kubeflow.org/pipeline_compilation_time: '2022-01-04T13:45:49.640213',
+    pipelines.kubeflow.org/pipeline_spec: '{"description": "Small or Large", "name":
+      "Conditional pipeline"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.10}
+spec:
+  entrypoint: conditional-pipeline
+  templates:
+  - name: condition-1
+    inputs:
+      parameters:
+      - {name: generate-random-op-Output}
+    dag:
+      tasks:
+      - name: small-num-op
+        template: small-num-op
+        arguments:
+          parameters:
+          - {name: generate-random-op-Output, value: '{{inputs.parameters.generate-random-op-Output}}'}
+  - name: condition-2
+    inputs:
+      parameters:
+      - {name: generate-random-op-Output}
+    dag:
+      tasks:
+      - name: large-num-op
+        template: large-num-op
+        arguments:
+          parameters:
+          - {name: generate-random-op-Output, value: '{{inputs.parameters.generate-random-op-Output}}'}
+  - name: conditional-pipeline
+    dag:
+      tasks:
+      - name: condition-1
+        template: condition-1
+        when: '{{tasks.generate-random-op.outputs.parameters.generate-random-op-Output}}
+          < 30'
+        dependencies: [generate-random-op]
+        arguments:
+          parameters:
+          - {name: generate-random-op-Output, value: '{{tasks.generate-random-op.outputs.parameters.generate-random-op-Output}}'}
+      - name: condition-2
+        template: condition-2
+        when: '{{tasks.generate-random-op.outputs.parameters.generate-random-op-Output}}
+          >= 30'
+        dependencies: [generate-random-op]
+        arguments:
+          parameters:
+          - {name: generate-random-op-Output, value: '{{tasks.generate-random-op.outputs.parameters.generate-random-op-Output}}'}
+      - {name: generate-random-op, template: generate-random-op}
+  - name: generate-random-op
+    container:
+      args: [--minimum, '0', --maximum, '100', '----output-paths', /tmp/outputs/Output/data]
+      command:
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def generate_random_op(minimum, maximum):
+            import random
+
+            result = random.randint(minimum, maximum)
+
+            print(f"Random Integer is : {result}")
+            return result
+
+        def _serialize_int(int_value: int) -> str:
+            if isinstance(int_value, str):
+                return int_value
+            if not isinstance(int_value, int):
+                raise TypeError('Value "{}" has type "{}" instead of int.'.format(
+                    str(int_value), str(type(int_value))))
+            return str(int_value)
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Generate random op', description='')
+        _parser.add_argument("--minimum", dest="minimum", type=int, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--maximum", dest="maximum", type=int, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("----output-paths", dest="_output_paths", type=str, nargs=1)
+        _parsed_args = vars(_parser.parse_args())
+        _output_files = _parsed_args.pop("_output_paths", [])
+
+        _outputs = generate_random_op(**_parsed_args)
+
+        _outputs = [_outputs]
+
+        _output_serializers = [
+            _serialize_int,
+
+        ]
+
+        import os
+        for idx, output_file in enumerate(_output_files):
+            try:
+                os.makedirs(os.path.dirname(output_file))
+            except OSError:
+                pass
+            with open(output_file, 'w') as f:
+                f.write(_output_serializers[idx](_outputs[idx]))
+      image: python:3.7
+    outputs:
+      parameters:
+      - name: generate-random-op-Output
+        valueFrom: {path: /tmp/outputs/Output/data}
+      artifacts:
+      - {name: generate-random-op-Output, path: /tmp/outputs/Output/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.10
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--minimum", {"inputValue": "minimum"}, "--maximum", {"inputValue":
+          "maximum"}, "----output-paths", {"outputPath": "Output"}], "command": ["sh",
+          "-ec", "program_path=$(mktemp)\nprintf \"%s\" \"$0\" > \"$program_path\"\npython3
+          -u \"$program_path\" \"$@\"\n", "def generate_random_op(minimum, maximum):\n    import
+          random\n\n    result = random.randint(minimum, maximum)\n\n    print(f\"Random
+          Integer is : {result}\")\n    return result\n\ndef _serialize_int(int_value:
+          int) -> str:\n    if isinstance(int_value, str):\n        return int_value\n    if
+          not isinstance(int_value, int):\n        raise TypeError(''Value \"{}\"
+          has type \"{}\" instead of int.''.format(\n            str(int_value), str(type(int_value))))\n    return
+          str(int_value)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Generate
+          random op'', description='''')\n_parser.add_argument(\"--minimum\", dest=\"minimum\",
+          type=int, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--maximum\",
+          dest=\"maximum\", type=int, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"----output-paths\",
+          dest=\"_output_paths\", type=str, nargs=1)\n_parsed_args = vars(_parser.parse_args())\n_output_files
+          = _parsed_args.pop(\"_output_paths\", [])\n\n_outputs = generate_random_op(**_parsed_args)\n\n_outputs
+          = [_outputs]\n\n_output_serializers = [\n    _serialize_int,\n\n]\n\nimport
+          os\nfor idx, output_file in enumerate(_output_files):\n    try:\n        os.makedirs(os.path.dirname(output_file))\n    except
+          OSError:\n        pass\n    with open(output_file, ''w'') as f:\n        f.write(_output_serializers[idx](_outputs[idx]))\n"],
+          "image": "python:3.7"}}, "inputs": [{"name": "minimum", "type": "Integer"},
+          {"name": "maximum", "type": "Integer"}], "name": "Generate random op", "outputs":
+          [{"name": "Output", "type": "Integer"}]}', pipelines.kubeflow.org/component_ref: '{}',
+        pipelines.kubeflow.org/arguments.parameters: '{"maximum": "100", "minimum":
+          "0"}'}
+  - name: large-num-op
+    container:
+      args: [--num, '{{inputs.parameters.generate-random-op-Output}}']
+      command:
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def large_num_op(num):
+            print(f"{num} is Large!")
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Large num op', description='')
+        _parser.add_argument("--num", dest="num", type=int, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = large_num_op(**_parsed_args)
+      image: python:3.7
+    inputs:
+      parameters:
+      - {name: generate-random-op-Output}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.10
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--num", {"inputValue": "num"}], "command": ["sh", "-ec", "program_path=$(mktemp)\nprintf
+          \"%s\" \"$0\" > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n",
+          "def large_num_op(num):\n    print(f\"{num} is Large!\")\n\nimport argparse\n_parser
+          = argparse.ArgumentParser(prog=''Large num op'', description='''')\n_parser.add_argument(\"--num\",
+          dest=\"num\", type=int, required=True, default=argparse.SUPPRESS)\n_parsed_args
+          = vars(_parser.parse_args())\n\n_outputs = large_num_op(**_parsed_args)\n"],
+          "image": "python:3.7"}}, "inputs": [{"name": "num", "type": "Integer"}],
+          "name": "Large num op"}', pipelines.kubeflow.org/component_ref: '{}', pipelines.kubeflow.org/arguments.parameters: '{"num":
+          "{{inputs.parameters.generate-random-op-Output}}"}'}
+  - name: small-num-op
+    container:
+      args: [--num, '{{inputs.parameters.generate-random-op-Output}}']
+      command:
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def small_num_op(num):
+            print(f"{num} is Small!")
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Small num op', description='')
+        _parser.add_argument("--num", dest="num", type=int, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = small_num_op(**_parsed_args)
+      image: python:3.7
+    inputs:
+      parameters:
+      - {name: generate-random-op-Output}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.10
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--num", {"inputValue": "num"}], "command": ["sh", "-ec", "program_path=$(mktemp)\nprintf
+          \"%s\" \"$0\" > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n",
+          "def small_num_op(num):\n    print(f\"{num} is Small!\")\n\nimport argparse\n_parser
+          = argparse.ArgumentParser(prog=''Small num op'', description='''')\n_parser.add_argument(\"--num\",
+          dest=\"num\", type=int, required=True, default=argparse.SUPPRESS)\n_parsed_args
+          = vars(_parser.parse_args())\n\n_outputs = small_num_op(**_parsed_args)\n"],
+          "image": "python:3.7"}}, "inputs": [{"name": "num", "type": "Integer"}],
+          "name": "Small num op"}', pipelines.kubeflow.org/component_ref: '{}', pipelines.kubeflow.org/arguments.parameters: '{"num":
+          "{{inputs.parameters.generate-random-op-Output}}"}'}
+  arguments:
+    parameters: []
+  serviceAccountName: pipeline-runner

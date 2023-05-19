@@ -1,0 +1,163 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: my-pipeline-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.20, pipelines.kubeflow.org/pipeline_compilation_time: '2023-05-18T12:28:07.448054',
+    pipelines.kubeflow.org/pipeline_spec: '{"inputs": [{"default": "1Gi", "name":
+      "pvc_size", "optional": true}], "name": "My pipeline"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.20}
+spec:
+  entrypoint: my-pipeline
+  templates:
+  - name: concat
+    container:
+      args: [--input1-path, '{{inputs.parameters.multiply-output_uri_in_file}}', --input2-path,
+        '{{inputs.parameters.multiply-2-output_uri_in_file}}', --output1-path, /data/output_compo3.txt,
+        --output1-path-file, /data/output_compo3_uri.txt]
+      command: [python3, /pipelines/component/src/concat.py]
+      image: hiruna72/concatenate@sha256:2119c2f95d5b65eb02cfca29dbbe6d8d9c1e61d900498ae45381ed9e28b0e48c
+      resources:
+        limits: {cpu: '2', memory: 2G}
+        requests: {cpu: '1', memory: 1G}
+      volumeMounts:
+      - {mountPath: /data, name: create-volume}
+    inputs:
+      parameters:
+      - {name: create-volume-name}
+      - {name: multiply-2-output_uri_in_file}
+      - {name: multiply-output_uri_in_file}
+    outputs:
+      artifacts:
+      - {name: concat-output_file, path: /data/output_compo3.txt}
+      - {name: concat-output_uri_in_file, path: /data/output_compo3_uri.txt}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+    volumes:
+    - name: create-volume
+      persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-name}}'}
+  - name: create-volume
+    resource:
+      action: create
+      manifest: |
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: '{{workflow.name}}-hellopipeline-data'
+        spec:
+          accessModes:
+          - ReadWriteMany
+          resources:
+            requests:
+              storage: '{{inputs.parameters.pvc_size}}'
+    inputs:
+      parameters:
+      - {name: pvc_size}
+    outputs:
+      parameters:
+      - name: create-volume-manifest
+        valueFrom: {jsonPath: '{}'}
+      - name: create-volume-name
+        valueFrom: {jsonPath: '{.metadata.name}'}
+      - name: create-volume-size
+        valueFrom: {jsonPath: '{.status.capacity.storage}'}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+  - name: multiply
+    container:
+      args: [--input1-path, /data/input_compo1.txt, --param1, '7', --output1-path,
+        /data/output_compo1.txt, --output1-path-file, /data/output_compo1_uri.txt]
+      command: [python3, /pipelines/component/src/multiplier.py]
+      image: hiruna72/multiplier@sha256:3016c55dcb8015ef9b457dce839206b5704afacd71a42a688132569d97684f99
+      resources:
+        limits: {cpu: '1', memory: 1G}
+        requests: {cpu: '0.5', memory: 1G}
+      volumeMounts:
+      - {mountPath: /data, name: create-volume}
+    inputs:
+      parameters:
+      - {name: create-volume-name}
+    outputs:
+      parameters:
+      - name: multiply-output_uri_in_file
+        valueFrom: {path: /data/output_compo1_uri.txt}
+      artifacts:
+      - {name: multiply-output_file, path: /data/output_compo1.txt}
+      - {name: multiply-output_uri_in_file, path: /data/output_compo1_uri.txt}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+    volumes:
+    - name: create-volume
+      persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-name}}'}
+  - name: multiply-2
+    container:
+      args: [--input1-path, /data/input_compo2.txt, --param1, '7', --output1-path,
+        /data/output_compo2.txt, --output1-path-file, /data/output_compo2_uri.txt]
+      command: [python3, /pipelines/component/src/multiplier.py]
+      image: hiruna72/multiplier@sha256:3016c55dcb8015ef9b457dce839206b5704afacd71a42a688132569d97684f99
+      resources:
+        limits: {cpu: '1', memory: 1G}
+        requests: {cpu: '0.5', memory: 1G}
+      volumeMounts:
+      - {mountPath: /data, name: create-volume}
+    inputs:
+      parameters:
+      - {name: create-volume-name}
+    outputs:
+      parameters:
+      - name: multiply-2-output_uri_in_file
+        valueFrom: {path: /data/output_compo2_uri.txt}
+      artifacts:
+      - {name: multiply-2-output_file, path: /data/output_compo2.txt}
+      - {name: multiply-2-output_uri_in_file, path: /data/output_compo2_uri.txt}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+    volumes:
+    - name: create-volume
+      persistentVolumeClaim: {claimName: '{{inputs.parameters.create-volume-name}}'}
+  - name: my-pipeline
+    inputs:
+      parameters:
+      - {name: pvc_size}
+    dag:
+      tasks:
+      - name: concat
+        template: concat
+        dependencies: [create-volume, multiply, multiply-2]
+        arguments:
+          parameters:
+          - {name: create-volume-name, value: '{{tasks.create-volume.outputs.parameters.create-volume-name}}'}
+          - {name: multiply-2-output_uri_in_file, value: '{{tasks.multiply-2.outputs.parameters.multiply-2-output_uri_in_file}}'}
+          - {name: multiply-output_uri_in_file, value: '{{tasks.multiply.outputs.parameters.multiply-output_uri_in_file}}'}
+      - name: create-volume
+        template: create-volume
+        arguments:
+          parameters:
+          - {name: pvc_size, value: '{{inputs.parameters.pvc_size}}'}
+      - name: multiply
+        template: multiply
+        dependencies: [create-volume]
+        arguments:
+          parameters:
+          - {name: create-volume-name, value: '{{tasks.create-volume.outputs.parameters.create-volume-name}}'}
+      - name: multiply-2
+        template: multiply-2
+        dependencies: [create-volume]
+        arguments:
+          parameters:
+          - {name: create-volume-name, value: '{{tasks.create-volume.outputs.parameters.create-volume-name}}'}
+  arguments:
+    parameters:
+    - {name: pvc_size, value: 1Gi}
+  serviceAccountName: pipeline-runner

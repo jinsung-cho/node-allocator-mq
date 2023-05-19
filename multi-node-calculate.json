@@ -1,0 +1,41 @@
+{
+  "filename": "multi-node-calculate",
+  "containers": [
+    {
+      "name": "concat",
+      "image": "hiruna72/concatenate@sha256:2119c2f95d5b65eb02cfca29dbbe6d8d9c1e61d900498ae45381ed9e28b0e48c",
+      "limits": {
+        "cpu": "2",
+        "memory": "2G"
+      },
+      "requests": {
+        "cpu": "1",
+        "memory": "1G"
+      }
+    },
+    {
+      "name": "multiply",
+      "image": "hiruna72/multiplier@sha256:3016c55dcb8015ef9b457dce839206b5704afacd71a42a688132569d97684f99",
+      "limits": {
+        "cpu": "1",
+        "memory": "1G"
+      },
+      "requests": {
+        "cpu": "0.5",
+        "memory": "1G"
+      }
+    },
+    {
+      "name": "multiply-2",
+      "image": "hiruna72/multiplier@sha256:3016c55dcb8015ef9b457dce839206b5704afacd71a42a688132569d97684f99",
+      "limits": {
+        "cpu": "1",
+        "memory": "1G"
+      },
+      "requests": {
+        "cpu": "0.5",
+        "memory": "1G"
+      }
+    }
+  ]
+}

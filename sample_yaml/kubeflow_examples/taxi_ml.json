@@ -1,0 +1,17 @@
+{
+    "taxi_ml":{
+    "isSplit": false,
+    "annotations":[
+        {"name":"A",
+        "resource":{
+                "cpu":"2",
+                "memory":"5G"
+                }},
+        {"name":"B",
+        "resource":{
+                "cpu":"2",
+                "memory":"5G"
+                }}
+        ]
+    }
+}

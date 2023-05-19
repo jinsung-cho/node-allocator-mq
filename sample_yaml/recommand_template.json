@@ -1,0 +1,37 @@
+{
+    "pipeline-name":{
+    "isSplit": false,
+    "annotations":[
+        {"name":"A",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }},
+        {"name":"B",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }},
+        {"name":"C",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }},
+        {"name":"D",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }},
+        {"name":"E",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }}
+        ]
+    }
+}

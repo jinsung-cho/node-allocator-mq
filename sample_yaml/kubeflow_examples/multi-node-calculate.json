@@ -1,0 +1,19 @@
+{
+    "multi-node-calculate":{
+    "isSplit": false,
+    "annotations":[
+        {"name":"concat",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }},
+        {"name":"multiply",
+        "resource":{
+                "cpu":"1",
+                "gpu":"1",
+                "memory":"1G"
+                }} 
+        ]
+    }
+}
