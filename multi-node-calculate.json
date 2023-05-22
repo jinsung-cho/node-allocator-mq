@@ -1,9 +1,9 @@
 {
-  "filename": "multi-node-calculate",
+  "filename": "ml-comparison-pipeline-1.0",
   "containers": [
     {
-      "name": "concat",
-      "image": "hiruna72/concatenate@sha256:2119c2f95d5b65eb02cfca29dbbe6d8d9c1e61d900498ae45381ed9e28b0e48c",
+      "name": "preprocessing-uci-secom-dataset",
+      "image": "chromatices/preprocessing-uci-secom:1.0",
       "limits": {
         "cpu": "2",
         "memory": "2G"
@@ -14,27 +14,51 @@
       }
     },
     {
-      "name": "multiply",
-      "image": "hiruna72/multiplier@sha256:3016c55dcb8015ef9b457dce839206b5704afacd71a42a688132569d97684f99",
+      "name": "training-elliptic-envelop-model",
+      "image": "chromatices/elliptic-envelope:1.0",
       "limits": {
-        "cpu": "1",
-        "memory": "1G"
+        "cpu": "2",
+        "memory": "4G"
       },
       "requests": {
-        "cpu": "0.5",
-        "memory": "1G"
+        "cpu": "1",
+        "memory": "2G"
       }
     },
     {
-      "name": "multiply-2",
-      "image": "hiruna72/multiplier@sha256:3016c55dcb8015ef9b457dce839206b5704afacd71a42a688132569d97684f99",
+      "name": "training-isolation-forest-model",
+      "image": "chromatices/isolation-forest:1.0",
       "limits": {
-        "cpu": "1",
-        "memory": "1G"
+        "cpu": "2",
+        "memory": "4G"
       },
       "requests": {
-        "cpu": "0.5",
-        "memory": "1G"
+        "cpu": "1",
+        "memory": "2G"
+      }
+    },
+    {
+      "name": "training-lof-model",
+      "image": "chromatices/lof:1.0",
+      "limits": {
+        "cpu": "2",
+        "memory": "4G"
+      },
+      "requests": {
+        "cpu": "1",
+        "memory": "2G"
+      }
+    },
+    {
+      "name": "training-one-class-svm-model",
+      "image": "chromatices/one-class-svm:1.0",
+      "limits": {
+        "cpu": "2",
+        "memory": "4G"
+      },
+      "requests": {
+        "cpu": "1",
+        "memory": "2G"
       }
     }
   ]
