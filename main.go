@@ -2,15 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"gopkg.in/yaml.v3"
-
+	"github.com/joho/godotenv"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/tidwall/gjson"
+
+	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-
-	"fmt"
 )
 
 type ContainerInfo struct {
@@ -75,7 +75,7 @@ func yaml2json(yamlFile []byte) map[string]interface{} {
 }
 
 // For get workflow information
-func workflowInfo(path string) {
+func workflowInfo(path string) []byte {
 	fileFullName := filepath.Base(path)
 	fileName := fileFullName[:len(fileFullName)-len(filepath.Ext(fileFullName))]
 	// Read the YAML file
@@ -113,15 +113,54 @@ func workflowInfo(path string) {
 			result.Containers = append(result.Containers, containerInfo)
 		}
 	}
-	finalResult, _ := json.MarshalIndent(result, "", "  ")
-	fmt.Println(string(finalResult))
-	//_ = ioutil.WriteFile(fileName+".json", finalResult, 0644)
+	finalResult, _ := json.Marshal(result)
+	return finalResult
+}
+
+func publish(b []byte) {
+	envErr := godotenv.Load(".env")
+	failOnError(envErr, "Failed load .env")
+	id := os.Getenv("MQ_ID")
+	passwd := os.Getenv("MQ_PASSWD")
+	ip := os.Getenv("MQ_IP")
+	port := os.Getenv("MQ_PORT")
+	queue := os.Getenv("MQ_RESOURCE_QUE")
+	conn, err := amqp.Dial("amqp://" + id + ":" + passwd + "@" + ip + ":" + port)
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		queue, // name
+		false, // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	err = ch.Publish(
+		"",     // exchange
+		q.Name, // routing key
+		false,  // mandatory
+		false,  // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        b,
+		})
+	failOnError(err, "Failed to publish a message")
+	log.Printf(" [x] Sent %s\n", b)
 }
 
 func main() {
 	paths := os.Args[1:]
 
 	for _, path := range paths {
-		workflowInfo(path)
+		result := workflowInfo(path)
+		publish(result)
 	}
 }
