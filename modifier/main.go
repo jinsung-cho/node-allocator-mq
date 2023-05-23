@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	//"fmt"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/tidwall/gjson"
@@ -26,7 +25,6 @@ type Workflow struct {
 	Containers []ContainerInfo `json:"containers"`
 }
 
-// Handle Error
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Panicf("%s: %s", msg, err)
@@ -83,12 +81,10 @@ func subscribe(byteCh chan<- []byte) {
 }
 
 func yaml2json(yamlFile []byte) []byte {
-	// Unmarshal the YAML data
 	var data map[string]interface{}
 	yamlErr := yaml.Unmarshal(yamlFile, &data)
 	failOnError(yamlErr, "Failed unmarshal yaml")
 
-	// Marshal the JSON data to string
 	jsonBytes, jsonMarshalErr := json.Marshal(data)
 	failOnError(jsonMarshalErr, "Failed Marshal json")
 
@@ -96,18 +92,15 @@ func yaml2json(yamlFile []byte) []byte {
 }
 
 func json2yaml(jsonFile []byte) []byte {
-	// JSON 데이터를 구조체로 언마샬링
 	var data map[string]interface{}
 	_ = json.Unmarshal(jsonFile, &data)
 
-	// YAML 데이터로 마샬링
 	yamlData, _ := yaml.Marshal(data)
 	return yamlData
 }
 
 func modifyWorkflow(byteCh <-chan []byte) {
 	for body := range byteCh {
-		// Modified JSON
 		var modifiedWorkflow Workflow
 		unmarshalErr := json.Unmarshal(body, &modifiedWorkflow)
 		failOnError(unmarshalErr, "Unmarshal")
