@@ -13,16 +13,16 @@ import (
 )
 
 type ContainerInfo struct {
-	Name     string                 `json:"name"`
-	Image    string                 `json:"image"`
-	Limits   map[string]interface{} `json:"limits"`
-	Requests map[string]interface{} `json:"requests"`
-	Cluster  string                 `json:"cluster"`
-	Node     string                 `json:"node"`
+	Name         string                 `json:"name"`
+	Image        string                 `json:"image"`
+	Limits       map[string]interface{} `json:"limits"`
+	Requests     map[string]interface{} `json:"requests"`
+	NodeSelector map[string]interface{} `json:"nodeSelector"`
 }
 
 type Workflow struct {
 	Filename   string          `json:"filename"`
+	OriginPath string          `json:"originPath"`
 	Containers []ContainerInfo `json:"containers"`
 }
 
@@ -94,8 +94,9 @@ func allocateNode(container ContainerInfo) ContainerInfo {
 	randomCloudName := arr[randomCloudIdx]
 	randomNodeNum := strconv.Itoa(rand.Intn(10) + 1)
 
-	newContainer.Cluster = randomCloudName
-	newContainer.Node = randomNodeNum
+	nodeSelector := make(map[string]interface{})
+	nodeSelector[randomCloudName] = randomNodeNum
+	newContainer.NodeSelector = nodeSelector
 
 	return newContainer
 }
@@ -108,6 +109,7 @@ func updateWorkflow(byteCh <-chan []byte, byteChV2 chan<- []byte) {
 		workflowV2 := Workflow{}
 
 		workflowV2.Filename = workflow.Filename
+		workflowV2.OriginPath = workflow.OriginPath
 		containers := workflow.Containers
 
 		for _, container := range containers {
