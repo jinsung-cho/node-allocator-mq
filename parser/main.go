@@ -26,7 +26,6 @@ type Workflow struct {
 	Containers []ContainerInfo `json:"containers"`
 }
 
-// Handle Error
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Panicf("%s: %s", msg, err)
@@ -34,20 +33,16 @@ func failOnError(err error, msg string) {
 }
 
 func yaml2jsonSpec(yamlFile []byte) map[string]interface{} {
-	// Unmarshal the YAML data
 	var data map[string]interface{}
 	yamlErr := yaml.Unmarshal(yamlFile, &data)
 	failOnError(yamlErr, "Failed unmarshal yaml")
 
-	// Convert the desired values to JSON
 	jsonData := make(map[string]interface{})
 	jsonData["wolkflow"] = data["spec"].(map[string]interface{})["templates"]
 
-	// Marshal the JSON data to string
 	jsonBytes, jsonMarshalErr := json.Marshal(jsonData)
 	failOnError(jsonMarshalErr, "Failed Marshal json")
 
-	// Access the value
 	var templates map[string]interface{}
 	jsonUnmarshalErr := json.Unmarshal(jsonBytes, &templates)
 	failOnError(jsonUnmarshalErr, "Failed UnMarshal json")
@@ -55,7 +50,6 @@ func yaml2jsonSpec(yamlFile []byte) map[string]interface{} {
 	return templates
 }
 
-// For get work's resource information
 func parseResource(resource map[string]interface{}) (map[string]interface{}, map[string]interface{}) {
 	cSpec, containerMarshalErr := json.Marshal(resource)
 	failOnError(containerMarshalErr, "Failed Marshal json")
@@ -67,14 +61,11 @@ func parseResource(resource map[string]interface{}) (map[string]interface{}, map
 }
 
 func parseContainerInfo(workInfo map[string]interface{}) ContainerInfo {
-	// Initializing ContainerInfo struct
 	containerInfo := ContainerInfo{}
 	containerInfo.Name = workInfo["name"].(string)
 	containerSpec := workInfo["container"].(map[string]interface{})
 	containerInfo.Image = containerSpec["image"].(string)
 
-	// Check if the value for resource setting exists
-	// Save the value if it exists
 	_, existResource := containerSpec["resources"]
 	if existResource {
 		request, limit := parseResource(containerSpec)
@@ -85,11 +76,9 @@ func parseContainerInfo(workInfo map[string]interface{}) ContainerInfo {
 	return containerInfo
 }
 
-// For get workflow information
 func parseWorkflowInfo(path string) []byte {
 	fileFullName := filepath.Base(path)
 	fileName := fileFullName[:len(fileFullName)-len(filepath.Ext(fileFullName))]
-	// Read the YAML file
 	yamlFile, readErr := ioutil.ReadFile(path)
 	failOnError(readErr, "Failed to read file")
 
@@ -99,12 +88,10 @@ func parseWorkflowInfo(path string) []byte {
 	result.OriginPath, _ = filepath.Abs(path)
 	result.Filename = fileName
 	result.Containers = []ContainerInfo{}
-	// Check the workflow in turn and extract the contents for each work
+
 	workflowList := templates["wolkflow"].([]interface{})
 	for _, work := range workflowList {
 		workInfo := work.(map[string]interface{})
-
-		// Check whether the content of the index is related to the container
 		_, existContainer := workInfo["container"]
 
 		if existContainer {
