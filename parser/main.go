@@ -32,26 +32,6 @@ func failOnError(err error, msg string) {
 	}
 }
 
-// For get work's specific resource information
-func specResource(r map[string]interface{}, name string) string {
-	_, exists := r[name]
-	if exists {
-		return r[name].(string)
-	}
-	return ""
-}
-
-// For get work's resource information
-func resource(resource map[string]interface{}) (map[string]interface{}, map[string]interface{}) {
-	cSpec, containerMarshalErr := json.Marshal(resource)
-	failOnError(containerMarshalErr, "Failed Marshal json")
-
-	requestSpec := gjson.Get(string(cSpec), "resources.requests").Value().(map[string]interface{})
-	limitSpec := gjson.Get(string(cSpec), "resources.limits").Value().(map[string]interface{})
-
-	return requestSpec, limitSpec
-}
-
 func yaml2json(yamlFile []byte) map[string]interface{} {
 	// Unmarshal the YAML data
 	var data map[string]interface{}
@@ -72,6 +52,36 @@ func yaml2json(yamlFile []byte) map[string]interface{} {
 	failOnError(jsonUnmarshalErr, "Failed UnMarshal json")
 
 	return templates
+}
+
+// For get work's resource information
+func resource(resource map[string]interface{}) (map[string]interface{}, map[string]interface{}) {
+	cSpec, containerMarshalErr := json.Marshal(resource)
+	failOnError(containerMarshalErr, "Failed Marshal json")
+
+	requestSpec := gjson.Get(string(cSpec), "resources.requests").Value().(map[string]interface{})
+	limitSpec := gjson.Get(string(cSpec), "resources.limits").Value().(map[string]interface{})
+
+	return requestSpec, limitSpec
+}
+
+func parseContainerInfo(workInfo map[string]interface{}) ContainerInfo {
+	// Initializing ContainerInfo struct
+	containerInfo := ContainerInfo{}
+	containerInfo.Name = workInfo["name"].(string)
+	containerSpec := workInfo["container"].(map[string]interface{})
+	containerInfo.Image = containerSpec["image"].(string)
+
+	// Check if the value for resource setting exists
+	// Save the value if it exists
+	_, existResource := containerSpec["resources"]
+	if existResource {
+		request, limit := resource(containerSpec)
+		containerInfo.Requests = request
+		containerInfo.Limits = limit
+	}
+
+	return containerInfo
 }
 
 // For get workflow information
@@ -96,20 +106,7 @@ func workflowInfo(path string) []byte {
 		_, existContainer := workInfo["container"]
 
 		if existContainer {
-			// Initializing ContainerInfo struct
-			containerInfo := ContainerInfo{}
-			containerInfo.Name = workInfo["name"].(string)
-			containerSpec := workInfo["container"].(map[string]interface{})
-			containerInfo.Image = containerSpec["image"].(string)
-
-			// Check if the value for resource setting exists
-			// Save the value if it exists
-			_, existResource := containerSpec["resources"]
-			if existResource {
-				request, limit := resource(containerSpec)
-				containerInfo.Requests = request
-				containerInfo.Limits = limit
-			}
+			containerInfo := parseContainerInfo(workInfo)
 			result.Containers = append(result.Containers, containerInfo)
 		}
 	}
@@ -153,7 +150,6 @@ func publish(b []byte) {
 			Body:        b,
 		})
 	failOnError(err, "Failed to publish a message")
-	log.Printf(" [x] Sent %s\n", b)
 }
 
 func main() {
