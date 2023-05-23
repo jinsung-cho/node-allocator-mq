@@ -23,13 +23,13 @@ class ContainerInfo:
         self.image = ""
         self.limits = {}
         self.requests = {}
-        self.cluster = ""
-        self.node = ""
+        self.nodeSelector = {}
 
 
 class Workflow:
     def __init__(self):
         self.filename = ""
+        self.originPath = ""
         self.containers = []
 
 
@@ -56,13 +56,19 @@ def subscribe(byteCh):
 
     channel.start_consuming()
 
-
-def clusterAndNode():
+def allocateNode(container):
+    container_v2 = ContainerInfo()
+    container_v2.name = container["name"]
+    container_v2.image = container["image"]
+    container_v2.limits = container["limits"]
+    container_v2.requests = container["requests"]
+    
     clouds = ["private", "azure", "aws"]
     random_cloud_name = random.choice(clouds)
     random_node_num = str(random.randint(1, 10))
-    return random_cloud_name, random_node_num
-
+    container_v2.nodeSelector[random_cloud_name] = random_node_num
+    
+    return container_v2
 
 def updateWorkflow(byteCh, byteChV2):
     global updateWorkflowAvailable
@@ -73,20 +79,15 @@ def updateWorkflow(byteCh, byteChV2):
         workflow = Workflow()
         json_data = json.loads(body.decode())
         workflow.filename = json_data["filename"]
+        workflow.originPath = json_data["originPath"]
         containers = json_data["containers"]
         for container in containers:
-            container_v2 = ContainerInfo()
-            container_v2.name = container["name"]
-            container_v2.image = container["image"]
-            container_v2.limits = container["limits"]
-            container_v2.requests = container["requests"]
-            container_v2.cluster, container_v2.node = clusterAndNode()
+            container_v2 = allocateNode(container)
             workflow.containers.append(container_v2.__dict__)
         final_result = json.dumps(workflow.__dict__).encode()
         byteChV2.append(final_result)
         updateWorkflowAvailable.clear()
         publishAvailable.set()
-
 
 def publish(byteChV2):
     global ip 
@@ -110,8 +111,6 @@ def publish(byteChV2):
         )
         connection.close()
         publishAvailable.clear()
-        print(body)
-
 
 if __name__ == "__main__":
     byteCh = []

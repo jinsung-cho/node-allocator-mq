@@ -22,6 +22,7 @@ type ContainerInfo struct {
 
 type Workflow struct {
 	Filename   string          `json:"filename"`
+	OriginPath string          `json:"originPath"`
 	Containers []ContainerInfo `json:"containers"`
 }
 
@@ -32,7 +33,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func yaml2json(yamlFile []byte) map[string]interface{} {
+func yaml2jsonSpec(yamlFile []byte) map[string]interface{} {
 	// Unmarshal the YAML data
 	var data map[string]interface{}
 	yamlErr := yaml.Unmarshal(yamlFile, &data)
@@ -55,7 +56,7 @@ func yaml2json(yamlFile []byte) map[string]interface{} {
 }
 
 // For get work's resource information
-func resource(resource map[string]interface{}) (map[string]interface{}, map[string]interface{}) {
+func parseResource(resource map[string]interface{}) (map[string]interface{}, map[string]interface{}) {
 	cSpec, containerMarshalErr := json.Marshal(resource)
 	failOnError(containerMarshalErr, "Failed Marshal json")
 
@@ -76,7 +77,7 @@ func parseContainerInfo(workInfo map[string]interface{}) ContainerInfo {
 	// Save the value if it exists
 	_, existResource := containerSpec["resources"]
 	if existResource {
-		request, limit := resource(containerSpec)
+		request, limit := parseResource(containerSpec)
 		containerInfo.Requests = request
 		containerInfo.Limits = limit
 	}
@@ -85,16 +86,17 @@ func parseContainerInfo(workInfo map[string]interface{}) ContainerInfo {
 }
 
 // For get workflow information
-func workflowInfo(path string) []byte {
+func parseWorkflowInfo(path string) []byte {
 	fileFullName := filepath.Base(path)
 	fileName := fileFullName[:len(fileFullName)-len(filepath.Ext(fileFullName))]
 	// Read the YAML file
 	yamlFile, readErr := ioutil.ReadFile(path)
 	failOnError(readErr, "Failed to read file")
 
-	templates := yaml2json(yamlFile)
+	templates := yaml2jsonSpec(yamlFile)
 
 	result := Workflow{}
+	result.OriginPath, _ = filepath.Abs(path)
 	result.Filename = fileName
 	result.Containers = []ContainerInfo{}
 	// Check the workflow in turn and extract the contents for each work
@@ -156,7 +158,7 @@ func main() {
 	paths := os.Args[1:]
 
 	for _, path := range paths {
-		result := workflowInfo(path)
+		result := parseWorkflowInfo(path)
 		publish(result)
 	}
 }

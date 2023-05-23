@@ -1,0 +1,164 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+    annotations:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline_compilation_time: 2023-05-18T12:23:21.663660
+        pipelines.kubeflow.org/pipeline_spec: '{"description": "demo of anomaly detetction pipeline", "inputs": [{"default": "/mnt/kubeflow", "name": "directory", "optional": true}], "name": "ml-pipeline"}'
+    generateName: ml-pipeline-
+    labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+spec:
+    arguments:
+        parameters:
+            - name: directory
+              value: /mnt/kubeflow
+    entrypoint: ml-pipeline
+    serviceAccountName: pipeline-runner
+    templates:
+        - dag:
+            tasks:
+                - name: preprocessing-uci-secom-dataset
+                  template: preprocessing-uci-secom-dataset
+                - dependencies:
+                    - preprocessing-uci-secom-dataset
+                  name: training-elliptic-envelop-model
+                  template: training-elliptic-envelop-model
+                - dependencies:
+                    - preprocessing-uci-secom-dataset
+                  name: training-isolation-forest-model
+                  template: training-isolation-forest-model
+                - dependencies:
+                    - preprocessing-uci-secom-dataset
+                  name: training-lof-model
+                  template: training-lof-model
+                - dependencies:
+                    - preprocessing-uci-secom-dataset
+                  name: training-one-class-svm-model
+                  template: training-one-class-svm-model
+          name: ml-pipeline
+        - container:
+            image: chromatices/preprocessing-uci-secom:1.0
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 2G
+                requests:
+                    cpu: "1"
+                    memory: 1G
+            volumeMounts:
+                - mountPath: /home/anomaly_detection/dataset/
+                  name: data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: preprocessing-uci-secom-dataset
+          nodeSelector:
+            private: "5"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/anomaly_detection
+                server: 10.0.1.102
+        - container:
+            image: chromatices/elliptic-envelope:1.0
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 4G
+                requests:
+                    cpu: "1"
+                    memory: 2G
+            volumeMounts:
+                - mountPath: /home/anomaly_detection/dataset/
+                  name: data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: training-elliptic-envelop-model
+          nodeSelector:
+            aws: "8"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/anomaly_detection
+                server: 10.0.1.102
+        - container:
+            image: chromatices/isolation-forest:1.0
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 4G
+                requests:
+                    cpu: "1"
+                    memory: 2G
+            volumeMounts:
+                - mountPath: /home/anomaly_detection/dataset/
+                  name: data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: training-isolation-forest-model
+          nodeSelector:
+            private: "3"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/anomaly_detection
+                server: 10.0.1.102
+        - container:
+            image: chromatices/lof:1.0
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 4G
+                requests:
+                    cpu: "1"
+                    memory: 2G
+            volumeMounts:
+                - mountPath: /home/anomaly_detection/dataset/
+                  name: data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: training-lof-model
+          nodeSelector:
+            aws: "3"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/anomaly_detection
+                server: 10.0.1.102
+        - container:
+            image: chromatices/one-class-svm:1.0
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 4G
+                requests:
+                    cpu: "1"
+                    memory: 2G
+            volumeMounts:
+                - mountPath: /home/anomaly_detection/dataset/
+                  name: data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: training-one-class-svm-model
+          nodeSelector:
+            private: "8"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/anomaly_detection
+                server: 10.0.1.102

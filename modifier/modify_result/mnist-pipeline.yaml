@@ -1,0 +1,275 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+    annotations:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline_compilation_time: 2023-05-18T12:25:58.636446
+        pipelines.kubeflow.org/pipeline_spec: '{"description": "CT pipeline", "name": "mnist using arcface"}'
+    generateName: mnist-using-arcface-
+    labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+spec:
+    arguments:
+        parameters: []
+    entrypoint: mnist-using-arcface
+    serviceAccountName: pipeline-runner
+    templates:
+        - container:
+            image: chromatices/mnist-analysis:latest
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 10G
+                    nvidia.com/gpu: "2"
+                requests:
+                    cpu: "1"
+                    memory: 5G
+            volumeMounts:
+                - mountPath: /data/
+                  name: data
+                - mountPath: /model
+                  name: train-model
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: analysis
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: analysis-total
+          nodeSelector:
+            private: "7"
+          outputs:
+            artifacts:
+                - name: mlpipeline-ui-metadata
+                  path: /mlpipeline-ui-metadata.json
+                - name: mlpipeline-metrics
+                  path: /mlpipeline-metrics.json
+                - name: analysis-total-accuracy
+                  path: /accuracy.json
+                - name: analysis-total-confusion_matrix
+                  path: /confusion_matrix.csv
+            parameters:
+                - name: analysis-total-accuracy
+                  valueFrom:
+                    path: /accuracy.json
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/mnist_pytorch
+                server: 10.0.1.102
+            - name: train-model
+              persistentVolumeClaim:
+                claimName: train-model-pvc
+        - dag:
+            tasks:
+                - name: deploy-mar
+                  template: deploy-mar
+          name: condition-1
+        - container:
+            image: chromatices/mnist-deploy:latest
+            volumeMounts:
+                - mountPath: /model
+                  name: train-model
+                - mountPath: /deploy-model
+                  name: deploy-model
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: deploy
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: deploy-mar
+          nodeSelector:
+            azure: "10"
+          volumes:
+            - name: deploy-model
+              persistentVolumeClaim:
+                claimName: deploy-model-pvc
+            - name: train-model
+              persistentVolumeClaim:
+                claimName: train-model-pvc
+        - container:
+            image: chromatices/mnist-embedding:latest
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 20G
+                    nvidia.com/gpu: "2"
+                requests:
+                    cpu: "1"
+                    memory: 10G
+            volumeMounts:
+                - mountPath: /data/
+                  name: data
+                - mountPath: /model
+                  name: train-model
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: embedding
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: embedding-data-using-embedding-model
+          nodeSelector:
+            azure: "4"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/mnist_pytorch
+                server: 10.0.1.102
+            - name: train-model
+              persistentVolumeClaim:
+                claimName: train-model-pvc
+        - container:
+            image: chromatices/mnist-pre-data:latest
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 2G
+                requests:
+                    cpu: "1"
+                    memory: 1G
+            volumeMounts:
+                - mountPath: /data/
+                  name: data
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: collect & preprocess data
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: load-preprocess-data-pipeline
+          nodeSelector:
+            private: "4"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/mnist_pytorch
+                server: 10.0.1.102
+        - dag:
+            tasks:
+                - dependencies:
+                    - train-faiss
+                  name: analysis-total
+                  template: analysis-total
+                - dependencies:
+                    - analysis-total
+                  name: condition-1
+                  template: condition-1
+                  when: '{{tasks.analysis-total.outputs.parameters.analysis-total-accuracy}} > 0.8'
+                - dependencies:
+                    - train-embedding-model
+                  name: embedding-data-using-embedding-model
+                  template: embedding-data-using-embedding-model
+                - name: load-preprocess-data-pipeline
+                  template: load-preprocess-data-pipeline
+                - dependencies:
+                    - validate-data-pipeline
+                  name: train-embedding-model
+                  template: train-embedding-model
+                - dependencies:
+                    - embedding-data-using-embedding-model
+                  name: train-faiss
+                  template: train-faiss
+                - dependencies:
+                    - load-preprocess-data-pipeline
+                  name: validate-data-pipeline
+                  template: validate-data-pipeline
+          name: mnist-using-arcface
+        - container:
+            image: chromatices/mnist-train-model:latest
+            resources:
+                limits:
+                    cpu: "4"
+                    memory: 40G
+                    nvidia.com/gpu: "2"
+                requests:
+                    cpu: "2"
+                    memory: 20G
+            volumeMounts:
+                - mountPath: /data/
+                  name: data
+                - mountPath: /model
+                  name: train-model
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: train model
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: train-embedding-model
+          nodeSelector:
+            azure: "9"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/mnist_pytorch
+                server: 10.0.1.102
+            - name: train-model
+              persistentVolumeClaim:
+                claimName: train-model-pvc
+        - container:
+            image: chromatices/mnist-train-faiss:latest
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 40G
+                    nvidia.com/gpu: "2"
+                requests:
+                    cpu: "1"
+                    memory: 20G
+            volumeMounts:
+                - mountPath: /data/
+                  name: data
+                - mountPath: /model
+                  name: train-model
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: train faiss
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: train-faiss
+          nodeSelector:
+            aws: "1"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/mnist_pytorch
+                server: 10.0.1.102
+            - name: train-model
+              persistentVolumeClaim:
+                claimName: train-model-pvc
+        - container:
+            image: chromatices/mnist-val-data:latest
+            resources:
+                limits:
+                    cpu: "4"
+                    memory: 15G
+                requests:
+                    cpu: "1"
+                    memory: 10G
+            volumeMounts:
+                - mountPath: /data/
+                  name: data
+          metadata:
+            annotations:
+                pipelines.kubeflow.org/task_display_name: validate data
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: validate-data-pipeline
+          nodeSelector:
+            aws: "4"
+          volumes:
+            - name: data
+              nfs:
+                path: /data/home/nfsroot/mnist_pytorch
+                server: 10.0.1.102
