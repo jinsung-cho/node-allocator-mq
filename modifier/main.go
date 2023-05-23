@@ -1,22 +1,28 @@
 package main
 
 import (
+	"encoding/json"
+	//"fmt"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
-
+	"github.com/tidwall/gjson"
+	"gopkg.in/yaml.v3"
+	"io/ioutil"
 	"log"
 	"os"
 )
 
 type ContainerInfo struct {
-	Name     string                 `json:"name"`
-	Image    string                 `json:"image"`
-	Limits   map[string]interface{} `json:"limits"`
-	Requests map[string]interface{} `json:"requests"`
+	Name         string                 `json:"name"`
+	Image        string                 `json:"image"`
+	Limits       map[string]interface{} `json:"limits"`
+	Requests     map[string]interface{} `json:"requests"`
+	NodeSelector map[string]interface{} `json:"nodeSelector"`
 }
 
 type Workflow struct {
 	Filename   string          `json:"filename"`
+	OriginPath string          `json:"originPath"`
 	Containers []ContainerInfo `json:"containers"`
 }
 
@@ -76,12 +82,66 @@ func subscribe(byteCh chan<- []byte) {
 	return
 }
 
-func UpdateWorkflow(byteCh <-chan []byte) {
-	log.Println(byteCh)
+func yaml2json(yamlFile []byte) []byte {
+	// Unmarshal the YAML data
+	var data map[string]interface{}
+	yamlErr := yaml.Unmarshal(yamlFile, &data)
+	failOnError(yamlErr, "Failed unmarshal yaml")
+
+	// Marshal the JSON data to string
+	jsonBytes, jsonMarshalErr := json.Marshal(data)
+	failOnError(jsonMarshalErr, "Failed Marshal json")
+
+	return jsonBytes
+}
+
+func json2yaml(jsonFile []byte) []byte {
+	// JSON 데이터를 구조체로 언마샬링
+	var data map[string]interface{}
+	_ = json.Unmarshal(jsonFile, &data)
+
+	// YAML 데이터로 마샬링
+	yamlData, _ := yaml.Marshal(data)
+	return yamlData
+}
+
+func modifyWorkflow(byteCh <-chan []byte) {
+	for body := range byteCh {
+		// Modified JSON
+		var modifiedWorkflow Workflow
+		unmarshalErr := json.Unmarshal(body, &modifiedWorkflow)
+		failOnError(unmarshalErr, "Unmarshal")
+
+		// Origin JSON file
+		yamlFile, readErr := ioutil.ReadFile(modifiedWorkflow.OriginPath)
+		failOnError(readErr, "Failed to read file")
+		jsonData := yaml2json(yamlFile)
+		templates := gjson.Get(string(jsonData), "spec.templates").Value().([]interface{})
+
+		var modifiedContainerInfo []ContainerInfo
+		modifiedContainerInfo = modifiedWorkflow.Containers
+		for _, container := range templates {
+			containerMap, _ := container.(map[string]interface{})
+			for _, mdContainer := range modifiedContainerInfo {
+				if containerMap["name"] == mdContainer.Name {
+					containerMap["nodeSelector"] = mdContainer.NodeSelector
+				}
+			}
+		}
+		var tmp map[string]interface{}
+		_ = yaml.Unmarshal(yamlFile, &tmp)
+		tmp["spec"].(map[string]interface{})["templates"] = templates
+
+		yamlData, _ := yaml.Marshal(tmp)
+		_ = ioutil.WriteFile("./modify_result/"+modifiedWorkflow.Filename+".yaml", yamlData, 0644)
+	}
 }
 
 func main() {
 	byteCh := make(chan []byte)
 	go subscribe(byteCh)
-	go UpdateWorkflow(byteCh)
+	go modifyWorkflow(byteCh)
+
+	var forever chan struct{}
+	<-forever
 }
