@@ -1,0 +1,173 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+    annotations:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline_compilation_time: 2023-05-18T12:23:37.248431
+        pipelines.kubeflow.org/pipeline_spec: '{"description": "An example pipeline that trains and logs a regression model.", "name": "Boston Housing Pipeline"}'
+    generateName: boston-housing-pipeline-
+    labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+spec:
+    arguments:
+        parameters: []
+    entrypoint: boston-housing-pipeline
+    serviceAccountName: pipeline-runner
+    templates:
+        - dag:
+            tasks:
+                - arguments:
+                    artifacts:
+                        - from: '{{tasks.train-model.outputs.artifacts.train-model-model}}'
+                          name: train-model-model
+                  dependencies:
+                    - test-model
+                    - train-model
+                  name: deploy-model
+                  template: deploy-model
+                - name: preprocess-data
+                  template: preprocess-data
+                - arguments:
+                    artifacts:
+                        - from: '{{tasks.preprocess-data.outputs.artifacts.preprocess-data-x_test}}'
+                          name: preprocess-data-x_test
+                        - from: '{{tasks.preprocess-data.outputs.artifacts.preprocess-data-y_test}}'
+                          name: preprocess-data-y_test
+                        - from: '{{tasks.train-model.outputs.artifacts.train-model-model}}'
+                          name: train-model-model
+                  dependencies:
+                    - preprocess-data
+                    - train-model
+                  name: test-model
+                  template: test-model
+                - arguments:
+                    artifacts:
+                        - from: '{{tasks.preprocess-data.outputs.artifacts.preprocess-data-x_train}}'
+                          name: preprocess-data-x_train
+                        - from: '{{tasks.preprocess-data.outputs.artifacts.preprocess-data-y_train}}'
+                          name: preprocess-data-y_train
+                  dependencies:
+                    - preprocess-data
+                  name: train-model
+                  template: train-model
+          name: boston-housing-pipeline
+        - container:
+            args:
+                - --model
+                - /tmp/inputs/input-0/data
+            image: gnovack/boston_pipeline_deploy_model:latest
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 2G
+                requests:
+                    cpu: "1"
+                    memory: 1G
+          inputs:
+            artifacts:
+                - name: train-model-model
+                  path: /tmp/inputs/input-0/data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: deploy-model
+          nodeSelector:
+            private: "8"
+        - container:
+            args: []
+            image: gnovack/boston_pipeline_preprocessing:latest
+            resources:
+                limits:
+                    cpu: "1"
+                    memory: 2G
+                requests:
+                    cpu: "0.5"
+                    memory: 1G
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: preprocess-data
+          nodeSelector:
+            private: "1"
+          outputs:
+            artifacts:
+                - name: preprocess-data-x_test
+                  path: /app/x_test.npy
+                - name: preprocess-data-x_train
+                  path: /app/x_train.npy
+                - name: preprocess-data-y_test
+                  path: /app/y_test.npy
+                - name: preprocess-data-y_train
+                  path: /app/y_train.npy
+        - container:
+            args:
+                - --x_test
+                - /tmp/inputs/input-0/data
+                - --y_test
+                - /tmp/inputs/input-1/data
+                - --model
+                - /tmp/inputs/input-2/data
+            image: gnovack/boston_pipeline_test:latest
+            resources:
+                limits:
+                    cpu: "2"
+                    memory: 2G
+                requests:
+                    cpu: "1"
+                    memory: 1G
+          inputs:
+            artifacts:
+                - name: preprocess-data-x_test
+                  path: /tmp/inputs/input-0/data
+                - name: preprocess-data-y_test
+                  path: /tmp/inputs/input-1/data
+                - name: train-model-model
+                  path: /tmp/inputs/input-2/data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: test-model
+          nodeSelector:
+            aws: "1"
+          outputs:
+            artifacts:
+                - name: test-model-mean_squared_error
+                  path: /app/output.txt
+        - container:
+            args:
+                - --x_train
+                - /tmp/inputs/input-0/data
+                - --y_train
+                - /tmp/inputs/input-1/data
+            image: gnovack/boston_pipeline_train:latest
+            resources:
+                limits:
+                    cpu: "4"
+                    memory: 2G
+                requests:
+                    cpu: "2"
+                    memory: 2G
+          inputs:
+            artifacts:
+                - name: preprocess-data-x_train
+                  path: /tmp/inputs/input-0/data
+                - name: preprocess-data-y_train
+                  path: /tmp/inputs/input-1/data
+          metadata:
+            labels:
+                pipelines.kubeflow.org/enable_caching: "true"
+                pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+                pipelines.kubeflow.org/pipeline-sdk-type: kfp
+          name: train-model
+          nodeSelector:
+            azure: "5"
+          outputs:
+            artifacts:
+                - name: train-model-model
+                  path: /app/model.pkl
