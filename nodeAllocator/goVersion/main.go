@@ -81,14 +81,23 @@ func subscribe(byteCh chan<- []byte) {
 	return
 }
 
-func clusterAndNode() (string, string) {
+func allocateNode(container ContainerInfo) ContainerInfo {
+	newContainer := ContainerInfo{}
+	newContainer.Name = container.Name
+	newContainer.Image = container.Image
+	newContainer.Limits = container.Limits
+	newContainer.Requests = container.Requests
+
 	rand.Seed(time.Now().UnixNano())
 	arr := []string{"private", "azure", "aws"}
 	randomCloudIdx := rand.Intn(len(arr))
 	randomCloudName := arr[randomCloudIdx]
 	randomNodeNum := strconv.Itoa(rand.Intn(10) + 1)
 
-	return randomCloudName, randomNodeNum
+	newContainer.Cluster = randomCloudName
+	newContainer.Node = randomNodeNum
+
+	return newContainer
 }
 
 func updateWorkflow(byteCh <-chan []byte, byteChV2 chan<- []byte) {
@@ -102,13 +111,7 @@ func updateWorkflow(byteCh <-chan []byte, byteChV2 chan<- []byte) {
 		containers := workflow.Containers
 
 		for _, container := range containers {
-			containerV2 := ContainerInfo{}
-			containerV2.Name = container.Name
-			containerV2.Image = container.Image
-			containerV2.Limits = container.Limits
-			containerV2.Requests = container.Requests
-
-			containerV2.Cluster, containerV2.Node = clusterAndNode()
+			containerV2 := allocateNode(container)
 			workflowV2.Containers = append(workflowV2.Containers, containerV2)
 		}
 		finalResult, _ := json.Marshal(workflowV2)
@@ -118,7 +121,6 @@ func updateWorkflow(byteCh <-chan []byte, byteChV2 chan<- []byte) {
 
 func publish(byteChV2 <-chan []byte) {
 	for body := range byteChV2 {
-
 		envErr := godotenv.Load("../../env/.env")
 		failOnError(envErr, "Failed load .env")
 
